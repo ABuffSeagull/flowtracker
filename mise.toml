@@ -3,3 +3,9 @@ elm = "latest"
 
 [env]
 _.path = "node_modules/.bin"
+
+[tasks]
+build = [
+	"elm-watch make --optimize",
+	"bun build ./index.html --outdir=dist/ --production",
+]
