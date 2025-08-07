@@ -1,0 +1,8 @@
+{
+	"targets": {
+		"FlowTracker": {
+			"inputs": ["src/Main.elm"],
+			"output": "src/elm.js"
+		}
+	}
+}
