@@ -4,6 +4,7 @@ import { register } from "component-register";
 
 Elm.Main.init({
 	node: document.querySelector("#root"),
+	flags: { width: window.innerWidth, height: window.innerHeight },
 });
 
 register("format-duration", {

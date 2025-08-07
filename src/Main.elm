@@ -1,6 +1,7 @@
 module Main exposing (..)
 
 import Browser
+import Browser.Events
 import Browser.Navigation as Navigation
 import Element exposing (..)
 import Element.Input as Input
@@ -12,7 +13,7 @@ import Tuple
 import Url
 
 
-main : Program () Model Msg
+main : Program { width : Int, height : Int } Model Msg
 main =
     Browser.application
         { init = init
@@ -28,6 +29,7 @@ type alias Model =
     { finishedTasks : List FinishedTask
     , now : Time.Posix
     , currentTask : TaskMode
+    , device : Device
     }
 
 
@@ -45,11 +47,12 @@ type alias FinishedTask =
     }
 
 
-init : () -> Url.Url -> Navigation.Key -> ( Model, Cmd Msg )
-init _ _ _ =
+init : { width : Int, height : Int } -> Url.Url -> Navigation.Key -> ( Model, Cmd Msg )
+init flags _ _ =
     ( { finishedTasks = []
       , now = Time.millisToPosix 0
       , currentTask = Creating { name = "" }
+      , device = classifyDevice flags
       }
     , Cmd.none
     )
@@ -63,6 +66,7 @@ type Msg
     | UpdateTaskName String
     | InitiateFinish
     | FinishTask Time.Posix
+    | ResizeWindow Int Int
 
 
 onUrlChange : a -> Msg
@@ -77,7 +81,10 @@ onUrlRequest _ =
 
 subscriptions : Model -> Sub Msg
 subscriptions _ =
-    Time.every 1000 Tick
+    Sub.batch
+        [ Time.every 1000 Tick
+        , Browser.Events.onResize ResizeWindow
+        ]
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -85,6 +92,9 @@ update msg model =
     case ( msg, model.currentTask ) of
         ( Tick now, _ ) ->
             ( { model | now = now }, Cmd.none )
+
+        ( ResizeWindow width height, _ ) ->
+            ( { model | device = classifyDevice { width = width, height = height } }, Cmd.none )
 
         ( InitiateStart, Creating _ ) ->
             ( model, Task.perform StartTask Time.now )
@@ -142,51 +152,68 @@ update msg model =
             ( model, Cmd.none )
 
 
+size =
+    modular 16 1.25 >> round
+
+
+classifyDevice : { window | height : Int, width : Int } -> Device
+classifyDevice window =
+    -- Tested in this ellie:
+    -- https://ellie-app.com/68QM7wLW8b9a1
+    { class =
+        let
+            longSide =
+                max window.width window.height
+
+            shortSide =
+                min window.width window.height
+        in
+        if shortSide <= 550 then
+            Phone
+
+        else if longSide <= 1100 then
+            Tablet
+
+        else if longSide <= 1500 then
+            Desktop
+
+        else
+            BigDesktop
+    , orientation =
+        if window.width < window.height then
+            Portrait
+
+        else
+            Landscape
+    }
+
+
+container device =
+    case device.class of
+        Phone ->
+            width fill
+
+        Tablet ->
+            fill |> maximum 550 |> width
+
+        Desktop ->
+            fill |> maximum 1100 |> width
+
+        BigDesktop ->
+            fill |> maximum 1500 |> width
+
+
 view : Model -> Browser.Document Msg
 view model =
     { title = "Timer"
     , body =
         List.singleton <|
-            layout [] <|
-                column [ width fill, height fill ]
-                    [ table [ centerX, alignTop ]
-                        { data = model.finishedTasks
-                        , columns =
-                            [ { header = text "Name"
-                              , width = fill
-                              , view = .name >> text
-                              }
-                            , { header = text "Start"
-                              , width = fill
-                              , view = .start >> viewPosix
-                              }
-                            , { header = text "End"
-                              , width = fill
-                              , view = .end >> viewPosix
-                              }
-                            , { header = text "Duration"
-                              , width = fill
-                              , view = \task -> makeDuration task.start task.end |> viewDuration
-                              }
-                            , { header = text "Interrupted?"
-                              , width = fill
-                              , view =
-                                    \task ->
-                                        if task.interrupted then
-                                            text "Yes"
-
-                                        else
-                                            text "No"
-                              }
-                            , { header = text "Break duration"
-                              , width = fill
-                              , view = \task -> makeDuration task.start task.end |> workToBreak |> viewDuration
-                              }
-                            ]
-                        }
-                    , case model.currentTask of
+            layout [ padding (size 1) ] <|
+                column
+                    [ height fill, container model.device, centerX, spacing (size 5) ]
+                    [ case model.currentTask of
                         Creating task ->
-                            column [ centerX, centerY, spacing 10 ]
+                            column [ centerX, spacing 10 ]
                                 [ Input.text []
                                     { text = task.name
                                     , placeholder = Nothing
@@ -197,13 +224,52 @@ view model =
                                 ]
 
                         Running task ->
-                            column [ centerX, centerY, spacing 10 ]
+                            column [ centerX, spacing 10 ]
                                 [ el [ centerX ] (text task.name)
                                 , viewTimer task.start model.now
                                 , Input.button [ centerX ] { onPress = Just InitiateFinish, label = text "Finish task" }
                                 ]
+                    , viewFinishedTasks model.finishedTasks
                     ]
     }
+
+
+viewFinishedTasks tasks =
+    table [ width fill, height fill, scrollbarY, spacing (size 3) ]
+        { data = tasks
+        , columns =
+            [ { header = text "Name"
+              , width = fill
+              , view = .name >> text
+              }
+            , { header = text "Start"
+              , width = fill
+              , view = .start >> viewPosix
+              }
+            , { header = text "End"
+              , width = fill
+              , view = .end >> viewPosix
+              }
+            , { header = text "Duration"
+              , width = fill
+              , view = \task -> makeDuration task.start task.end |> viewDuration
+              }
+            , { header = text "Interrupted?"
+              , width = fill
+              , view =
+                    \task ->
+                        if task.interrupted then
+                            text "Yes"
+
+                        else
+                            text "No"
+              }
+            , { header = text "Break duration"
+              , width = fill
+              , view = \task -> makeDuration task.start task.end |> workToBreak |> viewDuration
+              }
+            ]
+        }
 
 
 viewPosix posix =
