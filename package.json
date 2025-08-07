@@ -9,5 +9,9 @@
 	},
 	"peerDependencies": {
 		"typescript": "^5"
+	},
+	"dependencies": {
+		"component-register": "^0.8.7",
+		"temporal-polyfill": "^0.3.0"
 	}
 }
