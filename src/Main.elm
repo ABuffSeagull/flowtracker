@@ -8,6 +8,7 @@ import Html
 import Html.Attributes
 import Task
 import Time
+import Tuple
 import Url
 
 
@@ -24,19 +25,44 @@ main =
 
 
 type alias Model =
-    { start : Maybe Time.Posix, now : Time.Posix }
+    { finishedTasks : List FinishedTask
+    , now : Time.Posix
+    , currentTask : TaskMode
+    }
+
+
+type TaskMode
+    = Creating { name : String }
+    | Running { name : String, start : Time.Posix }
+
+
+type alias FinishedTask =
+    { name : String
+    , start : Time.Posix
+    , end : Time.Posix
+    , interrupted : Bool
+    , breakTime : Duration
+    }
 
 
 init : () -> Url.Url -> Navigation.Key -> ( Model, Cmd Msg )
 init _ _ _ =
-    ( { start = Nothing, now = Time.millisToPosix 0 }, Cmd.none )
+    ( { finishedTasks = []
+      , now = Time.millisToPosix 0
+      , currentTask = Creating { name = "" }
+      }
+    , Cmd.none
+    )
 
 
 type Msg
     = NoOp
     | Tick Time.Posix
-    | StartTime
-    | GotStartTime Time.Posix
+    | InitiateStart
+    | StartTask Time.Posix
+    | UpdateTaskName String
+    | InitiateFinish
+    | FinishTask Time.Posix
 
 
 onUrlChange : a -> Msg
@@ -54,20 +80,95 @@ subscriptions _ =
     Time.every 1000 Tick
 
 
+workToBreakMapping =
+    let
+        minuteToMillis =
+            (*) 60 >> (*) 1000
+    in
+    List.map
+        (Tuple.mapBoth minuteToMillis minuteToMillis)
+        [ ( 25, 3 )
+        , ( 40, 5 )
+        , ( 60, 7 )
+        , ( 80, 10 )
+        , ( 24 * 60, 15 )
+        ]
+
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    case msg of
-        Tick now ->
+    case ( msg, model.currentTask ) of
+        ( Tick now, _ ) ->
             ( { model | now = now }, Cmd.none )
 
-        NoOp ->
+        ( InitiateStart, Creating _ ) ->
+            ( model, Task.perform StartTask Time.now )
+
+        ( StartTask start, Creating task ) ->
+            ( { model | currentTask = Running { name = task.name, start = start } }, Cmd.none )
+
+        ( UpdateTaskName newName, Creating task ) ->
+            let
+                newTask =
+                    { task | name = newName }
+            in
+            ( { model | currentTask = Creating newTask }, Cmd.none )
+
+        ( UpdateTaskName _, Running _ ) ->
+            Debug.todo "Should this be done?"
+
+        ( InitiateFinish, Running _ ) ->
+            ( model, Task.perform FinishTask Time.now )
+
+        ( FinishTask end, Running task ) ->
+            let
+                workDuration =
+                    Time.posixToMillis end - Time.posixToMillis task.start
+
+                possibleBreaks =
+                    List.filterMap
+                        (\( work, break ) ->
+                            if workDuration <= work then
+                                Just break
+
+                            else
+                                Nothing
+                        )
+                        workToBreakMapping
+
+                breakTime =
+                    List.maximum possibleBreaks
+                        |> Maybe.withDefault 0
+            in
+            ( { model
+                | finishedTasks =
+                    { name = task.name
+                    , start = task.start
+                    , end = end
+                    , interrupted = False
+                    , breakTime = makeDurationRaw breakTime
+                    }
+                        :: model.finishedTasks
+                , currentTask = Creating { name = "" }
+              }
+            , Cmd.none
+            )
+
+        -- msgs in wrong models
+        ( NoOp, _ ) ->
             ( model, Cmd.none )
 
-        StartTime ->
-            ( model, Task.perform GotStartTime Time.now )
+        ( InitiateStart, Running _ ) ->
+            ( model, Cmd.none )
 
-        GotStartTime start ->
-            ( { model | start = Just start }, Cmd.none )
+        ( StartTask _, Running _ ) ->
+            ( model, Cmd.none )
+
+        ( InitiateFinish, Creating _ ) ->
+            ( model, Cmd.none )
+
+        ( FinishTask _, Creating _ ) ->
+            ( model, Cmd.none )
 
 
 view : Model -> Browser.Document Msg
@@ -76,31 +177,82 @@ view model =
     , body =
         List.singleton <|
             layout [] <|
-                column [ centerX, centerY, spacing 10 ]
-                    [ Input.button [ centerX ] { onPress = Just StartTime, label = text "Start" }
-                    , viewTimer model
+                column [ width fill, height fill ]
+                    [ table [ centerX, alignTop ]
+                        { data = model.finishedTasks
+                        , columns =
+                            [ { header = text "Name"
+                              , width = fill
+                              , view = .name >> text
+                              }
+                            , { header = text "Start"
+                              , width = fill
+                              , view = .start >> Time.posixToMillis >> String.fromInt >> text
+                              }
+                            , { header = text "End"
+                              , width = fill
+                              , view = .end >> Time.posixToMillis >> String.fromInt >> text
+                              }
+                            , { header = text "Duration"
+                              , width = fill
+                              , view = \task -> makeDuration task.start task.end |> viewDuration
+                              }
+                            , { header = text "Interrupted?"
+                              , width = fill
+                              , view =
+                                    \task ->
+                                        if task.interrupted then
+                                            text "Yes"
+
+                                        else
+                                            text "No"
+                              }
+                            , { header = text "Break duration"
+                              , width = fill
+                              , view = .breakTime >> viewDuration
+                              }
+                            ]
+                        }
+                    , case model.currentTask of
+                        Creating task ->
+                            column [ centerX, centerY, spacing 10 ]
+                                [ Input.text []
+                                    { text = task.name
+                                    , placeholder = Nothing
+                                    , label = Input.labelAbove [] (text "Task name")
+                                    , onChange = UpdateTaskName
+                                    }
+                                , Input.button [] { onPress = Just InitiateStart, label = text "Start task" }
+                                ]
+
+                        Running task ->
+                            column [ centerX, centerY, spacing 10 ]
+                                [ viewTimer task.start model.now
+                                , Input.button [] { onPress = Just InitiateFinish, label = text "Finish task" }
+                                ]
                     ]
     }
 
 
-viewTimer : Model -> Element msg
-viewTimer model =
-    let
-        duration =
-            case model.start of
-                Just start ->
-                    let
-                        startMillis =
-                            Time.posixToMillis start
+viewTimer start now =
+    viewDuration (makeDuration start now)
 
-                        nowMillis =
-                            Time.posixToMillis model.now
-                    in
-                    nowMillis - startMillis
 
-                Nothing ->
-                    0
-    in
+type Duration
+    = Duration Int
+
+
+makeDuration start end =
+    Duration <|
+        Time.posixToMillis end
+            - Time.posixToMillis start
+
+
+makeDurationRaw =
+    Duration
+
+
+viewDuration (Duration duration) =
     html <|
         Html.node
             "format-duration"
