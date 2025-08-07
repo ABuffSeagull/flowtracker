@@ -11,6 +11,7 @@
 		"typescript": "^5"
 	},
 	"dependencies": {
+		"@fontsource-variable/comfortaa": "^5.2.6",
 		"component-register": "^0.8.7",
 		"temporal-polyfill": "^0.3.0"
 	}

@@ -4,6 +4,7 @@ import Browser
 import Browser.Events
 import Browser.Navigation as Navigation
 import Element exposing (..)
+import Element.Font as Font
 import Element.Input as Input
 import Html
 import Html.Attributes
@@ -208,7 +209,11 @@ view model =
     { title = "Timer"
     , body =
         List.singleton <|
-            layout [ padding (size 1) ] <|
+            layout
+                [ padding (size 1)
+                , Font.family [ Font.typeface "Comfortaa Variable", Font.typeface "system-ui", Font.sansSerif ]
+                ]
+            <|
                 column
                     [ height fill, container model.device, centerX, spacing (size 5) ]
                     [ case model.currentTask of

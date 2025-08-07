@@ -4,6 +4,7 @@
     "": {
       "name": "flowtracker",
       "dependencies": {
+        "@fontsource-variable/comfortaa": "^5.2.6",
         "component-register": "^0.8.7",
         "temporal-polyfill": "^0.3.0",
       },
@@ -17,6 +18,8 @@
     },
   },
   "packages": {
+    "@fontsource-variable/comfortaa": ["@fontsource-variable/comfortaa@5.2.6", "", {}, "sha512-uWjgXWmfUhpsax7Y6lUcWNOveIgtYYw4ZPbCkvMWjGPU2aYtTUa1Q8etT3zaDmmWXJOgv677Cgchj8Fh1304EA=="],
+
     "@types/bun": ["@types/bun@1.2.19", "", { "dependencies": { "bun-types": "1.2.19" } }, "sha512-d9ZCmrH3CJ2uYKXQIUuZ/pUnTqIvLDS0SK7pFmbx8ma+ziH/FRMoAq5bYpRG7y+w1gl+HgyNZbtqgMq4W4e2Lg=="],
 
     "@types/node": ["@types/node@24.2.0", "", { "dependencies": { "undici-types": "~7.10.0" } }, "sha512-3xyG3pMCq3oYCNg7/ZP+E1ooTaGB4cG8JWRsqqOYQdbWNY4zbaV0Ennrd7stjiJEFZCaybcIgpTjJWHRfBSIDw=="],
