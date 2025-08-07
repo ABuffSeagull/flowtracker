@@ -20,3 +20,18 @@ register("format-duration", {
 	element.addPropertyChangedCallback(display);
 	display("duration", props.duration);
 });
+
+register("format-instant", {
+	instant: {
+		value: 0,
+		parse: true,
+	},
+})((props, { element }) => {
+	function display(name: string, val: any) {
+		element.textContent = Temporal.Instant.fromEpochMilliseconds(
+			val,
+		).toLocaleString(undefined, { style: "long" });
+	}
+	element.addPropertyChangedCallback(display);
+	display("instant", props.instant);
+});

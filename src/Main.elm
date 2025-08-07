@@ -80,21 +80,6 @@ subscriptions _ =
     Time.every 1000 Tick
 
 
-workToBreakMapping =
-    let
-        minuteToMillis =
-            (*) 60 >> (*) 1000
-    in
-    List.map
-        (Tuple.mapBoth minuteToMillis minuteToMillis)
-        [ ( 25, 3 )
-        , ( 40, 5 )
-        , ( 60, 7 )
-        , ( 80, 10 )
-        , ( 24 * 60, 15 )
-        ]
-
-
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case ( msg, model.currentTask ) of
@@ -115,7 +100,8 @@ update msg model =
             ( { model | currentTask = Creating newTask }, Cmd.none )
 
         ( UpdateTaskName _, Running _ ) ->
-            Debug.todo "Should this be done?"
+            -- Debug.todo "Should this be done?"
+            ( model, Cmd.none )
 
         ( InitiateFinish, Running _ ) ->
             ( model, Task.perform FinishTask Time.now )
@@ -123,22 +109,7 @@ update msg model =
         ( FinishTask end, Running task ) ->
             let
                 workDuration =
-                    Time.posixToMillis end - Time.posixToMillis task.start
-
-                possibleBreaks =
-                    List.filterMap
-                        (\( work, break ) ->
-                            if workDuration <= work then
-                                Just break
-
-                            else
-                                Nothing
-                        )
-                        workToBreakMapping
-
-                breakTime =
-                    List.maximum possibleBreaks
-                        |> Maybe.withDefault 0
+                    makeDuration task.start end
             in
             ( { model
                 | finishedTasks =
@@ -146,7 +117,7 @@ update msg model =
                     , start = task.start
                     , end = end
                     , interrupted = False
-                    , breakTime = makeDurationRaw breakTime
+                    , breakTime = workToBreak workDuration
                     }
                         :: model.finishedTasks
                 , currentTask = Creating { name = "" }
@@ -187,11 +158,11 @@ view model =
                               }
                             , { header = text "Start"
                               , width = fill
-                              , view = .start >> Time.posixToMillis >> String.fromInt >> text
+                              , view = .start >> viewPosix
                               }
                             , { header = text "End"
                               , width = fill
-                              , view = .end >> Time.posixToMillis >> String.fromInt >> text
+                              , view = .end >> viewPosix
                               }
                             , { header = text "Duration"
                               , width = fill
@@ -209,7 +180,7 @@ view model =
                               }
                             , { header = text "Break duration"
                               , width = fill
-                              , view = .breakTime >> viewDuration
+                              , view = \task -> makeDuration task.start task.end |> workToBreak |> viewDuration
                               }
                             ]
                         }
@@ -227,11 +198,20 @@ view model =
 
                         Running task ->
                             column [ centerX, centerY, spacing 10 ]
-                                [ viewTimer task.start model.now
-                                , Input.button [] { onPress = Just InitiateFinish, label = text "Finish task" }
+                                [ el [ centerX ] (text task.name)
+                                , viewTimer task.start model.now
+                                , Input.button [ centerX ] { onPress = Just InitiateFinish, label = text "Finish task" }
                                 ]
                     ]
     }
+
+
+viewPosix posix =
+    html <|
+        Html.node
+            "format-instant"
+            [ Html.Attributes.attribute "instant" (posix |> Time.posixToMillis |> String.fromInt) ]
+            []
 
 
 viewTimer start now =
@@ -258,3 +238,36 @@ viewDuration (Duration duration) =
             "format-duration"
             [ Html.Attributes.attribute "duration" (String.fromInt duration) ]
             []
+
+
+workToBreak (Duration duration) =
+    let
+        minuteToMillis =
+            (*) 60 >> (*) 1000
+
+        mapping =
+            List.map
+                (Tuple.mapBoth minuteToMillis minuteToMillis)
+                [ ( 25, 3 )
+                , ( 40, 5 )
+                , ( 60, 7 )
+                , ( 80, 10 )
+                , ( 24 * 60, 15 )
+                ]
+
+        possibleBreaks =
+            List.filterMap
+                (\( work, break ) ->
+                    if duration >= work then
+                        Just break
+
+                    else
+                        Nothing
+                )
+                mapping
+
+        maxBreak =
+            List.maximum possibleBreaks
+                |> Maybe.withDefault 180000
+    in
+    Duration maxBreak
