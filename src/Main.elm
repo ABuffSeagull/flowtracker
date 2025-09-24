@@ -3,11 +3,8 @@ module Main exposing (..)
 import Browser
 import Browser.Events
 import Browser.Navigation as Navigation
-import Element exposing (..)
-import Element.Font as Font
-import Element.Input as Input
-import Html
-import Html.Attributes
+import Html exposing (..)
+import Html.Attributes as Attr exposing (class)
 import Task
 import Time
 import Tuple
@@ -30,7 +27,8 @@ type alias Model =
     { finishedTasks : List FinishedTask
     , now : Time.Posix
     , currentTask : TaskMode
-    , device : Device
+
+    -- , device : Device
     }
 
 
@@ -53,7 +51,8 @@ init flags _ _ =
     ( { finishedTasks = []
       , now = Time.millisToPosix 0
       , currentTask = Creating { name = "" }
-      , device = classifyDevice flags
+
+      -- , device = classifyDevice flags
       }
     , Cmd.none
     )
@@ -67,7 +66,10 @@ type Msg
     | UpdateTaskName String
     | InitiateFinish
     | FinishTask Time.Posix
-    | ResizeWindow Int Int
+
+
+
+-- | ResizeWindow Int Int
 
 
 onUrlChange : a -> Msg
@@ -84,7 +86,8 @@ subscriptions : Model -> Sub Msg
 subscriptions _ =
     Sub.batch
         [ Time.every 1000 Tick
-        , Browser.Events.onResize ResizeWindow
+
+        -- , Browser.Events.onResize ResizeWindow
         ]
 
 
@@ -94,9 +97,8 @@ update msg model =
         ( Tick now, _ ) ->
             ( { model | now = now }, Cmd.none )
 
-        ( ResizeWindow width height, _ ) ->
-            ( { model | device = classifyDevice { width = width, height = height } }, Cmd.none )
-
+        -- ( ResizeWindow width height, _ ) ->
+        --     ( { model | device = classifyDevice { width = width, height = height } }, Cmd.none )
         ( InitiateStart, Creating _ ) ->
             ( model, Task.perform StartTask Time.now )
 
@@ -153,140 +155,132 @@ update msg model =
             ( model, Cmd.none )
 
 
-size =
-    modular 16 1.25 >> round
 
-
-classifyDevice : { window | height : Int, width : Int } -> Device
-classifyDevice window =
-    -- Tested in this ellie:
-    -- https://ellie-app.com/68QM7wLW8b9a1
-    { class =
-        let
-            longSide =
-                max window.width window.height
-
-            shortSide =
-                min window.width window.height
-        in
-        if shortSide <= 550 then
-            Phone
-
-        else if longSide <= 1100 then
-            Tablet
-
-        else if longSide <= 1500 then
-            Desktop
-
-        else
-            BigDesktop
-    , orientation =
-        if window.width < window.height then
-            Portrait
-
-        else
-            Landscape
-    }
-
-
-container device =
-    case device.class of
-        Phone ->
-            width fill
-
-        Tablet ->
-            fill |> maximum 550 |> width
-
-        Desktop ->
-            fill |> maximum 1100 |> width
-
-        BigDesktop ->
-            fill |> maximum 1500 |> width
+-- size =
+--     modular 16 1.25 >> round
+-- classifyDevice : { window | height : Int, width : Int } -> Device
+-- classifyDevice window =
+--     -- Tested in this ellie:
+--     -- https://ellie-app.com/68QM7wLW8b9a1
+--     { class =
+--         let
+--             longSide =
+--                 max window.width window.height
+--             shortSide =
+--                 min window.width window.height
+--         in
+--         if shortSide <= 550 then
+--             Phone
+--         else if longSide <= 1100 then
+--             Tablet
+--         else if longSide <= 1500 then
+--             Desktop
+--         else
+--             BigDesktop
+--     , orientation =
+--         if window.width < window.height then
+--             Portrait
+--         else
+--             Landscape
+--     }
+-- container device =
+--     case device.class of
+--         Phone ->
+--             width fill
+--         Tablet ->
+--             fill |> maximum 550 |> width
+--         Desktop ->
+--             fill |> maximum 1100 |> width
+--         BigDesktop ->
+--             fill |> maximum 1500 |> width
 
 
 view : Model -> Browser.Document Msg
 view model =
     { title = "Timer"
     , body =
-        List.singleton <|
-            layout
-                [ padding (size 1)
-                , Font.family [ Font.typeface "Comfortaa Variable", Font.typeface "system-ui", Font.sansSerif ]
+        [ div [ class "isolate flex justify-center h-dvh font-comfortaa" ]
+            [ fieldset [ class "fieldset w-full" ]
+                [ legend [ class "fieldset-legend" ] [ text "Name of task" ]
+                , input [ Attr.type_ "text", class "input" ] []
                 ]
-            <|
-                column
-                    [ height fill, container model.device, centerX, spacing (size 5) ]
-                    [ case model.currentTask of
-                        Creating task ->
-                            column [ centerX, spacing 10 ]
-                                [ Input.text []
-                                    { text = task.name
-                                    , placeholder = Nothing
-                                    , label = Input.labelAbove [] (text "Task name")
-                                    , onChange = UpdateTaskName
-                                    }
-                                , Input.button [] { onPress = Just InitiateStart, label = text "Start task" }
-                                ]
+            ]
+        ]
 
-                        Running task ->
-                            column [ centerX, spacing 10 ]
-                                [ el [ centerX ] (text task.name)
-                                , viewTimer task.start model.now
-                                , Input.button [ centerX ] { onPress = Just InitiateFinish, label = text "Finish task" }
-                                ]
-                    , viewFinishedTasks model.finishedTasks
-                    ]
+    -- List.singleton <|
+    --     layout
+    --         [ padding (size 1)
+    --         , Font.family [ Font.typeface "Comfortaa Variable", Font.typeface "system-ui", Font.sansSerif ]
+    --         ]
+    --     <|
+    --         column
+    --             [ height fill, container model.device, centerX, spacing (size 5) ]
+    --             [ case model.currentTask of
+    --                 Creating task ->
+    --                     column [ centerX, spacing 10 ]
+    --                         [ Input.text []
+    --                             { text = task.name
+    --                             , placeholder = Nothing
+    --                             , label = Input.labelAbove [] (text "Task name")
+    --                             , onChange = UpdateTaskName
+    --                             }
+    --                         , Input.button [] { onPress = Just InitiateStart, label = text "Start task" }
+    --                         ]
+    --                 Running task ->
+    --                     column [ centerX, spacing 10 ]
+    --                         [ el [ centerX ] (text task.name)
+    --                         , viewTimer task.start model.now
+    --                         , Input.button [ centerX ] { onPress = Just InitiateFinish, label = text "Finish task" }
+    --                         ]
+    --             , viewFinishedTasks model.finishedTasks
+    --             ]
     }
 
 
-viewFinishedTasks tasks =
-    table [ width fill, height fill, scrollbarY, spacing (size 3) ]
-        { data = tasks
-        , columns =
-            [ { header = text "Name"
-              , width = fill
-              , view = .name >> text
-              }
-            , { header = text "Start"
-              , width = fill
-              , view = .start >> viewPosix
-              }
-            , { header = text "End"
-              , width = fill
-              , view = .end >> viewPosix
-              }
-            , { header = text "Duration"
-              , width = fill
-              , view = \task -> makeDuration task.start task.end |> viewDuration
-              }
-            , { header = text "Interrupted?"
-              , width = fill
-              , view =
-                    \task ->
-                        if task.interrupted then
-                            text "Yes"
 
-                        else
-                            text "No"
-              }
-            , { header = text "Break duration"
-              , width = fill
-              , view = \task -> makeDuration task.start task.end |> workToBreak |> viewDuration
-              }
-            ]
-        }
-
-
-viewPosix posix =
-    html <|
-        Html.node
-            "format-instant"
-            [ Html.Attributes.attribute "instant" (posix |> Time.posixToMillis |> String.fromInt) ]
-            []
-
-
-viewTimer start now =
-    viewDuration (makeDuration start now)
+-- viewFinishedTasks tasks =
+--     table [ width fill, height fill, scrollbarY, spacing (size 3) ]
+--         { data = tasks
+--         , columns =
+--             [ { header = text "Name"
+--               , width = fill
+--               , view = .name >> text
+--               }
+--             , { header = text "Start"
+--               , width = fill
+--               , view = .start >> viewPosix
+--               }
+--             , { header = text "End"
+--               , width = fill
+--               , view = .end >> viewPosix
+--               }
+--             , { header = text "Duration"
+--               , width = fill
+--               , view = \task -> makeDuration task.start task.end |> viewDuration
+--               }
+--             , { header = text "Interrupted?"
+--               , width = fill
+--               , view =
+--                     \task ->
+--                         if task.interrupted then
+--                             text "Yes"
+--                         else
+--                             text "No"
+--               }
+--             , { header = text "Break duration"
+--               , width = fill
+--               , view = \task -> makeDuration task.start task.end |> workToBreak |> viewDuration
+--               }
+--             ]
+--         }
+-- viewPosix posix =
+--     html <|
+--         Html.node
+--             "format-instant"
+--             [ Html.Attributes.attribute "instant" (posix |> Time.posixToMillis |> String.fromInt) ]
+--             []
+-- viewTimer start now =
+--     viewDuration (makeDuration start now)
 
 
 type Duration
@@ -303,12 +297,13 @@ makeDurationRaw =
     Duration
 
 
-viewDuration (Duration duration) =
-    html <|
-        Html.node
-            "format-duration"
-            [ Html.Attributes.attribute "duration" (String.fromInt duration) ]
-            []
+
+-- viewDuration (Duration duration) =
+--     html <|
+--         Html.node
+--             "format-duration"
+--             [ Html.Attributes.attribute "duration" (String.fromInt duration) ]
+--             []
 
 
 workToBreak (Duration duration) =

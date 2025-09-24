@@ -1,3 +1,13 @@
+@import "tailwindcss";
+@source "./*.elm";
+@plugin "daisyui" {
+  themes: abyss --default;
+}
+
+@theme inline {
+  --font-comfortaa: "Comfortaa Variable", var(--font-sans);
+}
+
 /** This is taken from the @fontsource-variable/comfortaa/index.css file
  * Only changes is format('woff2-variations') -> format(woff2) tech(variations)
  */

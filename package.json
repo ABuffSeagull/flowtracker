@@ -5,7 +5,10 @@
 	"private": true,
 	"devDependencies": {
 		"@types/bun": "latest",
-		"elm-watch": "^1.2.2"
+		"bun-plugin-tailwind": "^0.0.15",
+		"daisyui": "^5.1.18",
+		"elm-watch": "^1.2.2",
+		"tailwindcss": "^4.1.13"
 	},
 	"peerDependencies": {
 		"typescript": "^5"
