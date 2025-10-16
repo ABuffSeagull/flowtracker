@@ -10,7 +10,9 @@
   },
   "dependencies": {
     "@fontsource-variable/comfortaa": "^5.2.8",
-    "solid-js": "^1.9.9"
+    "solid-js": "^1.9.9",
+    "temporal-polyfill": "^0.3.0",
+    "valibot": "^1.1.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.14",
