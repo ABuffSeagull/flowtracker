@@ -1,19 +1,48 @@
-import { createEffect, createSignal, createMemo, Show } from "solid-js";
+import {
+	createEffect,
+	createSignal,
+	createMemo,
+	Show,
+	For,
+	createResource,
+	onCleanup,
+} from "solid-js";
 import * as v from "valibot";
+import { openDB, type DBSchema } from "idb";
+
+interface TaskDB extends DBSchema {
+	tasks: {
+		value: {
+			name: string;
+			start: bigint;
+			end: bigint;
+			interrupted: boolean;
+			breakDuration: number;
+		};
+		key: number;
+	};
+}
 
 const taskSchema = v.object({
-	start: v.instance(Temporal.Instant),
 	name: v.string(),
+	start: v.instance(Temporal.Instant),
+	end: v.optional(v.instance(Temporal.Instant)),
 });
 type Task = v.InferOutput<typeof taskSchema>;
+
+const db = await openDB<TaskDB>("flowtracker", undefined, {
+	upgrade(db) {
+		db.createObjectStore("tasks", {
+			autoIncrement: true,
+			keyPath: "id",
+		});
+	},
+});
 
 export default function App() {
 	let dialog!: HTMLDialogElement;
 
-	const [task, setTask] = createSignal<Task | undefined>({
-		name: "Foobar",
-		start: Temporal.Now.instant(),
-	});
+	const [task, setTask] = createSignal<Task | undefined>(undefined);
 
 	createEffect(() => {
 		if (!task()) {
@@ -34,6 +63,40 @@ export default function App() {
 		);
 	}
 
+	const [grouped, { refetch }] = createResource(async () => {
+		const tasks = await db.getAll("tasks");
+		const hydrated = tasks
+			.map((task) => ({
+				...task,
+				start: Temporal.Instant.fromEpochNanoseconds(task.start),
+				end: Temporal.Instant.fromEpochNanoseconds(task.end),
+				breakDuration: Temporal.Duration.from({
+					nanoseconds: task.breakDuration,
+				}),
+			}))
+			.sort((a, b) => Temporal.Instant.compare(b.start, a.start));
+		const nowZone = Temporal.Now.zonedDateTimeISO();
+		return Map.groupBy(hydrated, (task) =>
+			Temporal.PlainDate.from(task.start.toZonedDateTimeISO(nowZone)).toJSON(),
+		);
+	});
+
+	async function onFinish() {
+		const t = task();
+		if (t) {
+			const end = Temporal.Now.instant();
+			await db.put("tasks", {
+				name: t.name,
+				start: t.start.epochNanoseconds,
+				end: Temporal.Now.instant().epochNanoseconds,
+				interrupted: false,
+				breakDuration: t.start.until(end).nanoseconds,
+			});
+			setTask(undefined);
+			await refetch();
+		}
+	}
+
 	return (
 		<>
 			<dialog class="modal" ref={dialog}>
@@ -52,9 +115,64 @@ export default function App() {
 					</form>
 				</div>
 			</dialog>
-			<div class="flex h-full items-center justify-center">
+			<div class="h-full grid grid-cols-[1fr_auto_1fr] p-5">
+				<div class="h-full overflow-y-auto">
+					<table class="table table-zebra table-pin-rows">
+						<For each={Array.from(grouped()?.entries() ?? [])}>
+							{([groupDate, entries]) => (
+								<>
+									<thead>
+										<tr>
+											<th>
+												{Temporal.PlainDate.from(groupDate).toLocaleString(
+													undefined,
+													{ dateStyle: "medium" },
+												)}
+											</th>
+											<th>Start</th>
+											<th>End</th>
+											<th>Duration</th>
+											<th>Break Time</th>
+										</tr>
+									</thead>
+									<tbody>
+										<For each={entries}>
+											{(entry) => (
+												<tr>
+													<td>{entry.name}</td>
+													<td>
+														{entry.start.toLocaleString(undefined, {
+															timeStyle: "short",
+														})}
+													</td>
+													<td>
+														{entry.end.toLocaleString(undefined, {
+															timeStyle: "short",
+														})}
+													</td>
+													<td>
+														{entry.end
+															.since(entry.start)
+															.round({
+																largestUnit: "hours",
+																smallestUnit: "seconds",
+															})
+															.toLocaleString(undefined, {
+																timeStyle: "short",
+															})}
+													</td>
+												</tr>
+											)}
+										</For>
+									</tbody>
+								</>
+							)}
+						</For>
+					</table>
+				</div>
+				<div class="divider divider-horizontal" />
 				<Show when={task()}>
-					<div class="stats">
+					<div class="stats place-self-center">
 						<div class="stat">
 							<div class="stat-title">Name</div>
 							<div class="stat-value">{task()?.name}</div>
@@ -62,6 +180,7 @@ export default function App() {
 								<button
 									type="button"
 									class="btn btn-primary btn-xs btn-outline"
+									on:click={onFinish}
 								>
 									Finish
 								</button>
@@ -72,7 +191,7 @@ export default function App() {
 							<div class="stat-value">
 								<Countup start={task()!.start} />
 							</div>
-							<span class="stat-description">
+							<span class="stat-desc">
 								Started at{" "}
 								{task()?.start.toLocaleString(undefined, {
 									timeStyle: "short",
@@ -92,9 +211,9 @@ type CountupProps = {
 
 function Countup(props: CountupProps) {
 	const [now, setNow] = createSignal(Temporal.Now.instant());
-	createEffect(() => {
-		setInterval(() => setNow(Temporal.Now.instant()), 1000);
-	});
+
+	const timer = setInterval(() => setNow(Temporal.Now.instant()), 1000);
+	onCleanup(() => clearInterval(timer));
 
 	const duration = createMemo(() =>
 		props.start

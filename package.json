@@ -9,7 +9,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@faker-js/faker": "^10.1.0",
     "@fontsource-variable/comfortaa": "^5.2.8",
+    "idb": "^8.0.3",
     "solid-js": "^1.9.9",
     "temporal-polyfill": "^0.3.0",
     "valibot": "^1.1.0"
