@@ -1,21 +1,23 @@
 {
-	"name": "flowtracker",
-	"module": "index.ts",
-	"type": "module",
-	"private": true,
-	"devDependencies": {
-		"@types/bun": "latest",
-		"bun-plugin-tailwind": "^0.0.15",
-		"daisyui": "^5.1.18",
-		"elm-watch": "^1.2.2",
-		"tailwindcss": "^4.1.13"
-	},
-	"peerDependencies": {
-		"typescript": "^5"
-	},
-	"dependencies": {
-		"@fontsource-variable/comfortaa": "^5.2.6",
-		"component-register": "^0.8.7",
-		"temporal-polyfill": "^0.3.0"
-	}
+  "name": "flowtracker",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "solid-js": "^1.9.9"
+  },
+  "devDependencies": {
+    "@types/node": "^24.6.0",
+    "typescript": "~5.9.3",
+    "vite": "npm:rolldown-vite@7.1.14",
+    "vite-plugin-solid": "^2.11.8"
+  },
+  "overrides": {
+    "vite": "npm:rolldown-vite@7.1.14"
+  }
 }
