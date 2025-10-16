@@ -1,4 +1,9 @@
 @import "tailwindcss";
+@import "@fontsource-variable/comfortaa" layer(base);
 @plugin "daisyui" {
   themes: abyss --default;
+}
+
+@theme inline {
+  --font-comfortaa: "Comfortaa Variable", var(--font-sans);
 }

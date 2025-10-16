@@ -17,10 +17,10 @@ export default function App() {
 		<>
 			<dialog class="modal" ref={dialog}>
 				<div class="modal-box">
-					<h2 class="text-xl capitalize font-bold">Start new task</h2>
+					<h2 class="text-xl capitalize font-bold mb-3">New task</h2>
 					<form method="dialog" ref={form} on:submit={onSubmit}>
 						<fieldset class="fieldset">
-							<legend class="fieldset-legend">Name</legend>
+							<legend class="fieldset-legend">Task Name</legend>
 							<input type="text" name="name" class="input" />
 						</fieldset>
 						<div class="modal-action">
