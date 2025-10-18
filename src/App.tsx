@@ -2,35 +2,35 @@ import {
 	createEffect,
 	createSignal,
 	createMemo,
-	Show,
 	For,
 	createResource,
 	onCleanup,
+	Switch,
+	Match,
 } from "solid-js";
 import * as v from "valibot";
 import { openDB, type DBSchema } from "idb";
+import type { TaggedUnion, Primitive } from "type-fest";
+import { match } from "ts-pattern";
+
+type Task = {
+	name: string;
+	start: Temporal.Instant;
+	interrupted: boolean;
+	end?: Temporal.Instant;
+	breakDuration?: Temporal.Duration;
+};
 
 interface TaskDB extends DBSchema {
 	tasks: {
 		value: {
-			name: string;
-			start: bigint;
-			end: bigint;
-			interrupted: boolean;
-			breakDuration: number;
+			[Key in keyof Task]: Task[Key] extends Primitive ? Task[Key] : string;
 		};
 		key: number;
 	};
 }
 
-const taskSchema = v.object({
-	name: v.string(),
-	start: v.instance(Temporal.Instant),
-	end: v.optional(v.instance(Temporal.Instant)),
-});
-type Task = v.InferOutput<typeof taskSchema>;
-
-const db = await openDB<TaskDB>("flowtracker", undefined, {
+const dbPromise = openDB<TaskDB>("flowtracker", undefined, {
 	upgrade(db) {
 		db.createObjectStore("tasks", {
 			autoIncrement: true,
@@ -39,62 +39,77 @@ const db = await openDB<TaskDB>("flowtracker", undefined, {
 	},
 });
 
+type State = TaggedUnion<
+	"type",
+	{
+		Running: { task: Task };
+		Break: {};
+		Empty: {};
+	}
+>;
+
 export default function App() {
 	let dialog!: HTMLDialogElement;
 
-	const [task, setTask] = createSignal<Task | undefined>(undefined);
+	const [state, setState] = createSignal<State>({ type: "Empty" });
 
 	createEffect(() => {
-		if (!task()) {
-			dialog.showModal();
-		}
+		match(state())
+			.with({ type: "Empty" }, () => {
+				dialog.showModal();
+			})
+			.with({ type: "Running" }, { type: "Break" }, () => {})
+			.exhaustive();
 	});
 
 	let form!: HTMLFormElement;
 
 	function onSubmit() {
 		const formData = new FormData(form);
+		const name = v.parse(v.string(), formData.get("name"));
 
-		setTask(
-			v.parse(taskSchema, {
-				start: Temporal.Now.instant(),
-				name: formData.get("name") ?? "",
-			}),
-		);
+		setState({
+			type: "Running",
+			task: { name, start: Temporal.Now.instant(), interrupted: false },
+		});
+		form.reset();
 	}
 
 	const [grouped, { refetch }] = createResource(async () => {
+		const db = await dbPromise;
 		const tasks = await db.getAll("tasks");
-		const hydrated = tasks
-			.map((task) => ({
-				...task,
-				start: Temporal.Instant.fromEpochNanoseconds(task.start),
-				end: Temporal.Instant.fromEpochNanoseconds(task.end),
-				breakDuration: Temporal.Duration.from({
-					nanoseconds: task.breakDuration,
-				}),
-			}))
-			.sort((a, b) => Temporal.Instant.compare(b.start, a.start));
+		const hydrated: Array<Task> = tasks.map((task) => ({
+			...task,
+			start: Temporal.Instant.from(task.start),
+			end: task.end != undefined ? Temporal.Instant.from(task.end) : undefined,
+			breakDuration:
+				task.breakDuration != undefined
+					? Temporal.Duration.from(task.breakDuration)
+					: undefined,
+		}));
 		const nowZone = Temporal.Now.zonedDateTimeISO();
 		return Map.groupBy(hydrated, (task) =>
 			Temporal.PlainDate.from(task.start.toZonedDateTimeISO(nowZone)).toJSON(),
 		);
 	});
 
-	async function onFinish() {
-		const t = task();
-		if (t) {
-			const end = Temporal.Now.instant();
-			await db.put("tasks", {
-				name: t.name,
-				start: t.start.epochNanoseconds,
-				end: Temporal.Now.instant().epochNanoseconds,
-				interrupted: false,
-				breakDuration: t.start.until(end).nanoseconds,
-			});
-			setTask(undefined);
-			await refetch();
-		}
+	function onFinish() {
+		match(state())
+			.with({ type: "Running" }, async ({ task }) => {
+				const end = Temporal.Now.instant();
+				const db = await dbPromise;
+				await db.put("tasks", {
+					name: task.name,
+					start: task.start.toJSON(),
+					end: Temporal.Now.instant().toJSON(),
+					interrupted: false,
+					breakDuration: task.start.until(end).toJSON(),
+				});
+				setState({ type: "Empty" });
+				await refetch();
+			})
+			.with({ type: "Empty" }, { type: "Break" }, () => {})
+			.exhaustive();
 	}
 
 	return (
@@ -146,13 +161,13 @@ export default function App() {
 														})}
 													</td>
 													<td>
-														{entry.end.toLocaleString(undefined, {
+														{entry.end?.toLocaleString(undefined, {
 															timeStyle: "short",
 														})}
 													</td>
 													<td>
 														{entry.end
-															.since(entry.start)
+															?.since(entry.start)
 															.round({
 																largestUnit: "hours",
 																smallestUnit: "seconds",
@@ -171,35 +186,37 @@ export default function App() {
 					</table>
 				</div>
 				<div class="divider divider-horizontal" />
-				<Show when={task()}>
-					<div class="stats place-self-center">
-						<div class="stat">
-							<div class="stat-title">Name</div>
-							<div class="stat-value">{task()?.name}</div>
-							<div class="stat-actions">
-								<button
-									type="button"
-									class="btn btn-primary btn-xs btn-outline"
-									on:click={onFinish}
-								>
-									Finish
-								</button>
+				<Switch>
+					<Match when={state().type == "Running"}>
+						<div class="stats place-self-center">
+							<div class="stat">
+								<div class="stat-title">Name</div>
+								<div class="stat-value">{state().task.name}</div>
+								<div class="stat-actions">
+									<button
+										type="button"
+										class="btn btn-primary btn-xs btn-outline"
+										on:click={onFinish}
+									>
+										Finish
+									</button>
+								</div>
+							</div>
+							<div class="stat">
+								<span class="stat-title">Duration</span>
+								<div class="stat-value">
+									<Countup start={state().task.start} />
+								</div>
+								<span class="stat-desc">
+									Started at{" "}
+									{state().task.start.toLocaleString(undefined, {
+										timeStyle: "short",
+									})}
+								</span>
 							</div>
 						</div>
-						<div class="stat">
-							<span class="stat-title">Duration</span>
-							<div class="stat-value">
-								<Countup start={task()!.start} />
-							</div>
-							<span class="stat-desc">
-								Started at{" "}
-								{task()?.start.toLocaleString(undefined, {
-									timeStyle: "short",
-								})}
-							</span>
-						</div>
-					</div>
-				</Show>
+					</Match>
+				</Switch>
 			</div>
 		</>
 	);
